@@ -1,0 +1,170 @@
+name: Build Proxmox VM Templates
+
+on:
+  workflow_dispatch:
+    inputs:
+      os_type:
+        description: 'OS Type to build'
+        required: true
+        type: choice
+        options:
+          - all
+          - debian
+          - ubuntu
+          - windows-server
+          - windows-client
+      specific_version:
+        description: 'Specific version (optional, e.g., debian-12, ubuntu-24)'
+        required: false
+        type: string
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  push:
+    branches:
+      - main
+    paths:
+      - 'templates/**'
+      - 'scripts/**'
+      - 'http/**'
+
+env:
+  PACKER_VERSION: "1.10.0"
+
+jobs:
+  prepare:
+    runs-on: self-hosted
+    outputs:
+      build_matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine build targets
+        id: set-matrix
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            OS_TYPE="${{ github.event.inputs.os_type }}"
+            SPECIFIC_VERSION="${{ github.event.inputs.specific_version }}"
+          else
+            OS_TYPE="all"
+            SPECIFIC_VERSION=""
+          fi
+
+          if [[ "$SPECIFIC_VERSION" != "" ]]; then
+            # Build specific version only
+            case "$SPECIFIC_VERSION" in
+              debian-12)
+                MATRIX='{"include":[{"template":"templates/linux/debian.pkr.hcl","only":"proxmox-iso.debian-12","name":"Debian 12"}]}'
+                ;;
+              debian-13)
+                MATRIX='{"include":[{"template":"templates/linux/debian.pkr.hcl","only":"proxmox-iso.debian-13","name":"Debian 13"}]}'
+                ;;
+              ubuntu-22)
+                MATRIX='{"include":[{"template":"templates/linux/ubuntu.pkr.hcl","only":"proxmox-iso.ubuntu-22","name":"Ubuntu 22.04"}]}'
+                ;;
+              ubuntu-24)
+                MATRIX='{"include":[{"template":"templates/linux/ubuntu.pkr.hcl","only":"proxmox-iso.ubuntu-24","name":"Ubuntu 24.04"}]}'
+                ;;
+              windows-server-2019)
+                MATRIX='{"include":[{"template":"templates/windows/windows-server.pkr.hcl","only":"proxmox-iso.windows-server-2019","name":"Windows Server 2019"}]}'
+                ;;
+              windows-server-2025)
+                MATRIX='{"include":[{"template":"templates/windows/windows-server.pkr.hcl","only":"proxmox-iso.windows-server-2025","name":"Windows Server 2025"}]}'
+                ;;
+              windows-10)
+                MATRIX='{"include":[{"template":"templates/windows/windows-client.pkr.hcl","only":"proxmox-iso.windows-10","name":"Windows 10"}]}'
+                ;;
+              windows-11)
+                MATRIX='{"include":[{"template":"templates/windows/windows-client.pkr.hcl","only":"proxmox-iso.windows-11","name":"Windows 11"}]}'
+                ;;
+              *)
+                echo "Unknown version: $SPECIFIC_VERSION"
+                exit 1
+                ;;
+            esac
+          elif [[ "$OS_TYPE" == "all" ]]; then
+            MATRIX='{"include":[
+              {"template":"templates/linux/debian.pkr.hcl","only":"","name":"Debian (12 & 13)"},
+              {"template":"templates/linux/ubuntu.pkr.hcl","only":"","name":"Ubuntu (22 & 24)"},
+              {"template":"templates/windows/windows-server.pkr.hcl","only":"","name":"Windows Server (2019 & 2025)"},
+              {"template":"templates/windows/windows-client.pkr.hcl","only":"","name":"Windows Client (10 & 11)"}
+            ]}'
+          elif [[ "$OS_TYPE" == "debian" ]]; then
+            MATRIX='{"include":[{"template":"templates/linux/debian.pkr.hcl","only":"","name":"Debian (12 & 13)"}]}'
+          elif [[ "$OS_TYPE" == "ubuntu" ]]; then
+            MATRIX='{"include":[{"template":"templates/linux/ubuntu.pkr.hcl","only":"","name":"Ubuntu (22 & 24)"}]}'
+          elif [[ "$OS_TYPE" == "windows-server" ]]; then
+            MATRIX='{"include":[{"template":"templates/windows/windows-server.pkr.hcl","only":"","name":"Windows Server (2019 & 2025)"}]}'
+          elif [[ "$OS_TYPE" == "windows-client" ]]; then
+            MATRIX='{"include":[{"template":"templates/windows/windows-client.pkr.hcl","only":"","name":"Windows Client (10 & 11)"}]}'
+          fi
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  build:
+    needs: prepare
+    runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.build_matrix) }}
+    
+    name: Build ${{ matrix.name }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        run: |
+          if ! command -v packer &> /dev/null; then
+            echo "Installing Packer..."
+            curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+            sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+            sudo apt-get update && sudo apt-get install packer
+          fi
+          packer version
+
+      - name: Create variables file
+        run: |
+          cat > variables.auto.pkrvars.hcl <<EOF
+          proxmox_api_url          = "${{ secrets.PROXMOX_API_URL }}"
+          proxmox_api_token_id     = "${{ secrets.PROXMOX_API_TOKEN_ID }}"
+          proxmox_api_token_secret = "${{ secrets.PROXMOX_API_TOKEN_SECRET }}"
+          proxmox_node             = "${{ secrets.PROXMOX_NODE }}"
+          EOF
+
+      - name: Initialize Packer
+        run: |
+          packer init ${{ matrix.template }}
+
+      - name: Validate Packer template
+        run: |
+          packer validate ${{ matrix.template }}
+
+      - name: Build template
+        run: |
+          if [[ "${{ matrix.only }}" != "" ]]; then
+            packer build -only=${{ matrix.only }} ${{ matrix.template }}
+          else
+            packer build ${{ matrix.template }}
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f variables.auto.pkrvars.hcl
+
+  notify:
+    needs: build
+    runs-on: self-hosted
+    if: always()
+    steps:
+      - name: Build Status
+        run: |
+          if [[ "${{ needs.build.result }}" == "success" ]]; then
+            echo "✅ All template builds completed successfully!"
+          else
+            echo "❌ Some template builds failed. Check the logs above."
+            exit 1
+          fi

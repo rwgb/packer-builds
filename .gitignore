@@ -1,0 +1,25 @@
+# Add secrets to your GitHub repository
+*.auto.pkrvars.hcl
+variables.pkrvars.hcl
+
+# Packer cache
+packer_cache/
+.packer.d/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+crash.log
+
+# Temporary files
+*.tmp
+*~
