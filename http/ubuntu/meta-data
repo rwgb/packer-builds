@@ -1,1 +1,2 @@
-#cloud-config
+instance-id: ubuntu-packer
+local-hostname: ubuntu

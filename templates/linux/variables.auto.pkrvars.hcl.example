@@ -1,0 +1,26 @@
+# Example Proxmox Variables Configuration
+# Copy this file to variables.auto.pkrvars.hcl and update with your values
+
+# Proxmox Connection Settings
+proxmox_api_url          = "https://YOUR_PROXMOX_IP:8006/api2/json"
+proxmox_api_token_id     = "your-user@pve!token-name"
+proxmox_api_token_secret = "your-token-secret-here"
+proxmox_node             = "your-node-name"
+
+# Common VM Settings
+ssh_username = "packer"
+ssh_password = "packer"  # Change this for production!
+
+# Storage Settings
+storage_pool      = "local-lvm"
+storage_pool_type = "lvm"
+iso_storage_pool  = "local"
+
+# Network Settings
+network_bridge = "vmbr0"
+
+# VM Resource Defaults
+cpu_type = "host"
+cores    = 2
+memory   = 2048
+disk_size = "20G"

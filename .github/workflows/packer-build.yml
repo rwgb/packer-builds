@@ -1,0 +1,180 @@
+name: Packer Build Templates
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      template:
+        description: 'Template to build (all, debian, ubuntu, windows-server, windows-client, configured)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - debian
+          - ubuntu
+          - windows-server
+          - windows-client
+          - configured
+
+jobs:
+  # Build Debian base templates
+  build-debian:
+    name: Build Debian Templates
+    runs-on: self-hosted
+    if: github.event.inputs.template == 'all' || github.event.inputs.template == 'debian' || github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: 'latest'
+
+      - name: Initialize Packer
+        working-directory: templates/linux
+        run: packer init debian.pkr.hcl
+
+      - name: Validate Packer template
+        working-directory: templates/linux
+        run: packer validate -var-file=variables.auto.pkrvars.hcl debian.pkr.hcl
+
+      - name: Build Debian templates
+        working-directory: templates/linux
+        run: packer build -var-file=variables.auto.pkrvars.hcl debian.pkr.hcl
+
+  # Build Ubuntu base templates
+  build-ubuntu:
+    name: Build Ubuntu Templates
+    runs-on: self-hosted
+    if: github.event.inputs.template == 'all' || github.event.inputs.template == 'ubuntu' || github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: 'latest'
+
+      - name: Initialize Packer
+        working-directory: templates/linux
+        run: packer init ubuntu.pkr.hcl
+
+      - name: Validate Packer template
+        working-directory: templates/linux
+        run: packer validate -var-file=variables.auto.pkrvars.hcl ubuntu.pkr.hcl
+
+      - name: Build Ubuntu templates
+        working-directory: templates/linux
+        run: packer build -var-file=variables.auto.pkrvars.hcl ubuntu.pkr.hcl
+
+  # Build Windows Server base templates
+  build-windows-server:
+    name: Build Windows Server Templates
+    runs-on: self-hosted
+    if: github.event.inputs.template == 'all' || github.event.inputs.template == 'windows-server' || github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: 'latest'
+
+      - name: Initialize Packer
+        working-directory: templates/windows
+        run: packer init windows-server.pkr.hcl
+
+      - name: Validate Packer template
+        working-directory: templates/windows
+        run: packer validate windows-server.pkr.hcl
+        env:
+          PKR_VAR_proxmox_api_url: ${{ secrets.PROXMOX_API_URL }}
+          PKR_VAR_proxmox_api_token_id: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PKR_VAR_proxmox_api_token_secret: ${{ secrets.PROXMOX_API_TOKEN_SECRET }}
+          PKR_VAR_proxmox_node: ${{ secrets.PROXMOX_NODE }}
+
+      - name: Build Windows Server templates
+        working-directory: templates/windows
+        run: packer build windows-server.pkr.hcl
+        env:
+          PKR_VAR_proxmox_api_url: ${{ secrets.PROXMOX_API_URL }}
+          PKR_VAR_proxmox_api_token_id: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PKR_VAR_proxmox_api_token_secret: ${{ secrets.PROXMOX_API_TOKEN_SECRET }}
+          PKR_VAR_proxmox_node: ${{ secrets.PROXMOX_NODE }}
+
+  # Build Windows Client base templates
+  build-windows-client:
+    name: Build Windows Client Templates
+    runs-on: self-hosted
+    if: github.event.inputs.template == 'all' || github.event.inputs.template == 'windows-client' || github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: 'latest'
+
+      - name: Initialize Packer
+        working-directory: templates/windows
+        run: packer init windows-client.pkr.hcl
+
+      - name: Validate Packer template
+        working-directory: templates/windows
+        run: packer validate windows-client.pkr.hcl
+        env:
+          PKR_VAR_proxmox_api_url: ${{ secrets.PROXMOX_API_URL }}
+          PKR_VAR_proxmox_api_token_id: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PKR_VAR_proxmox_api_token_secret: ${{ secrets.PROXMOX_API_TOKEN_SECRET }}
+          PKR_VAR_proxmox_node: ${{ secrets.PROXMOX_NODE }}
+
+      - name: Build Windows Client templates
+        working-directory: templates/windows
+        run: packer build windows-client.pkr.hcl
+        env:
+          PKR_VAR_proxmox_api_url: ${{ secrets.PROXMOX_API_URL }}
+          PKR_VAR_proxmox_api_token_id: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PKR_VAR_proxmox_api_token_secret: ${{ secrets.PROXMOX_API_TOKEN_SECRET }}
+          PKR_VAR_proxmox_node: ${{ secrets.PROXMOX_NODE }}
+
+  # Build configured templates (build-chaining)
+  build-configured:
+    name: Build Configured Templates
+    runs-on: self-hosted
+    needs: [build-debian, build-ubuntu]
+    if: |
+      always() &&
+      (needs.build-debian.result == 'success' || needs.build-debian.result == 'skipped') &&
+      (needs.build-ubuntu.result == 'success' || needs.build-ubuntu.result == 'skipped') &&
+      (github.event.inputs.template == 'all' || github.event.inputs.template == 'configured' || github.event_name != 'workflow_dispatch')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: 'latest'
+
+      - name: Initialize Packer
+        working-directory: templates/linux
+        run: packer init configured-hosts.pkr.hcl
+
+      - name: Validate Packer template
+        working-directory: templates/linux
+        run: packer validate -var-file=variables.auto.pkrvars.hcl configured-hosts.pkr.hcl
+
+      - name: Build configured templates
+        working-directory: templates/linux
+        run: packer build -var-file=variables.auto.pkrvars.hcl configured-hosts.pkr.hcl
