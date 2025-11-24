@@ -30,6 +30,9 @@ jobs:
           echo "/usr/bin:/usr/local/bin:/bin" >> $GITHUB_PATH
           echo "Updated PATH for workflow"
       
+      - name: Install unzip
+        run: sudo apt-get update && sudo apt-get install -y unzip
+      
       - name: Verify unzip is available
         run: |
           echo "Checking for unzip..."
