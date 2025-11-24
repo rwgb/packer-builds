@@ -36,11 +36,41 @@ jobs:
       
       - name: Validate Packer template
         working-directory: templates/linux
-        run: packer validate -var-file=skull.pkrvars.hcl ubuntu.pkr.hcl
+        run: |
+          packer validate \
+            -var "proxmox_api_url=${{ secrets.PROXMOX_API_URL }}" \
+            -var "proxmox_api_token_id=${{ secrets.PROXMOX_API_TOKEN_ID }}" \
+            -var "proxmox_api_token_secret=${{ secrets.PROXMOX_API_TOKEN_SECRET }}" \
+            -var "proxmox_node=${{ secrets.PROXMOX_NODE_SKULL }}" \
+            -var "ssh_username=${{ secrets.SSH_USERNAME }}" \
+            -var "ssh_password=${{ secrets.SSH_PASSWORD }}" \
+            -var "storage_pool=${{ secrets.STORAGE_POOL }}" \
+            -var "iso_storage_pool=${{ secrets.ISO_STORAGE_POOL }}" \
+            -var "network_bridge=${{ secrets.NETWORK_BRIDGE }}" \
+            -var "cpu_type=${{ secrets.CPU_TYPE }}" \
+            -var "cores=${{ secrets.CORES }}" \
+            -var "memory=${{ secrets.MEMORY }}" \
+            -var "disk_size=${{ secrets.DISK_SIZE }}" \
+            ubuntu.pkr.hcl
       
       - name: Build Ubuntu template
         working-directory: templates/linux
-        run: packer build -var-file=skull.pkrvars.hcl ubuntu.pkr.hcl
+        run: |
+          packer build \
+            -var "proxmox_api_url=${{ secrets.PROXMOX_API_URL }}" \
+            -var "proxmox_api_token_id=${{ secrets.PROXMOX_API_TOKEN_ID }}" \
+            -var "proxmox_api_token_secret=${{ secrets.PROXMOX_API_TOKEN_SECRET }}" \
+            -var "proxmox_node=${{ secrets.PROXMOX_NODE_SKULL }}" \
+            -var "ssh_username=${{ secrets.SSH_USERNAME }}" \
+            -var "ssh_password=${{ secrets.SSH_PASSWORD }}" \
+            -var "storage_pool=${{ secrets.STORAGE_POOL }}" \
+            -var "iso_storage_pool=${{ secrets.ISO_STORAGE_POOL }}" \
+            -var "network_bridge=${{ secrets.NETWORK_BRIDGE }}" \
+            -var "cpu_type=${{ secrets.CPU_TYPE }}" \
+            -var "cores=${{ secrets.CORES }}" \
+            -var "memory=${{ secrets.MEMORY }}" \
+            -var "disk_size=${{ secrets.DISK_SIZE }}" \
+            ubuntu.pkr.hcl
         env:
           PACKER_LOG: 1
       
