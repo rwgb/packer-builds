@@ -62,14 +62,14 @@ echo -e "${YELLOW}Template: $TEMPLATE_FILE${NC}"
 echo -e "${YELLOW}Variables: $VAR_FILE${NC}"
 echo ""
 
-# Check if variable file exists
-if [ ! -f "$VAR_FILE" ]; then
-    echo -e "${RED}Error: Variable file $VAR_FILE not found${NC}"
-    exit 1
-fi
-
 # Build the template
 cd "templates/${TEMPLATE_DIR}"
+
+# Check if variable file exists (after cd to the correct directory)
+if [ ! -f "$VAR_FILE" ]; then
+    echo -e "${RED}Error: Variable file $VAR_FILE not found in $(pwd)${NC}"
+    exit 1
+fi
 
 echo -e "${GREEN}Initializing Packer...${NC}"
 packer init "$TEMPLATE_FILE"
