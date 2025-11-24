@@ -25,7 +25,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      - name: Setup environment PATH
+        run: |
+          echo "/usr/bin:/usr/local/bin:/bin" >> $GITHUB_PATH
+          echo "Updated PATH for workflow"
+      
+      - name: Verify unzip is available
+        run: |
+          echo "Checking for unzip..."
+          which unzip || echo "unzip not in PATH"
+          unzip -v || echo "unzip command failed"
+          echo "PATH: $PATH"
+      
+      - name: Check if Packer is installed
+        id: check_packer
+        run: |
+          if command -v packer &> /dev/null; then
+            echo "installed=true" >> $GITHUB_OUTPUT
+            echo "Packer is already installed: $(packer version)"
+          else
+            echo "installed=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Setup Packer
+        if: steps.check_packer.outputs.installed != 'true'
         uses: hashicorp/setup-packer@main
         with:
           version: 'latest'
