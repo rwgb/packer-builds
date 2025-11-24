@@ -4,14 +4,21 @@ packer {
       version = ">= 1.1.8"
       source  = "github.com/hashicorp/proxmox"
     }
-    windows-update = {
-      version = "0.16.8"
-      source  = "github.com/rgl/windows-update"
+    git = {
+      version = ">= 0.6.2"
+      source  = "github.com/ethanmdavidson/git"
     }
   }
 }
 
-# Variable Definitions
+data "git-repository" "cwd" {}
+
+locals {
+  build_timestamp = formatdate("YYYY-MM-DD hh:mm:ss ZZZ", timestamp())
+  commit_sha      = substr(data.git-repository.cwd.head, 0, 8)
+  build_description = "Windows Client Template | Built: ${local.build_timestamp} | Commit: ${local.commit_sha}"
+}
+
 variable "proxmox_api_url" {
   type = string
 }
@@ -29,39 +36,14 @@ variable "proxmox_node" {
   type = string
 }
 
-variable "storage_pool" {
-  type    = string
-  default = "local-lvm"
-}
-
 variable "iso_storage_pool" {
   type    = string
   default = "local"
 }
 
-variable "network_bridge" {
+variable "vm_storage_pool" {
   type    = string
-  default = "vmbr0"
-}
-
-variable "cpu_type" {
-  type    = string
-  default = "host"
-}
-
-variable "cores" {
-  type    = number
-  default = 2
-}
-
-variable "memory" {
-  type    = number
-  default = 4096
-}
-
-variable "disk_size" {
-  type    = string
-  default = "60G"
+  default = "local-lvm"
 }
 
 variable "winrm_username" {
@@ -71,223 +53,178 @@ variable "winrm_username" {
 
 variable "winrm_password" {
   type      = string
-  default   = "Packer123!"
   sensitive = true
+  default   = "P@cker123!"
 }
 
-# Windows 10 Base Template
+# Windows 10 Pro
 source "proxmox-iso" "windows-10" {
   proxmox_url              = var.proxmox_api_url
   username                 = var.proxmox_api_token_id
   token                    = var.proxmox_api_token_secret
-  node                     = var.proxmox_node
   insecure_skip_tls_verify = true
 
-  # VM Settings
-  vm_name              = "windows-10-base"
-  template_name        = "windows-10-base"
-  template_description = "Windows 10 Base Template"
-  
-  # CRITICAL: Disable KVM as required
-  disable_kvm = true
-  
-  # Enable QEMU Guest Agent
-  qemu_agent = true
+  node                 = var.proxmox_node
+  vm_name              = "windows-10-template"
+  template_description = local.build_description
 
-  # ISO Settings
-  iso_file = "${var.iso_storage_pool}:iso/windows-10.iso"
-  additional_iso_files {
-    device           = "sata3"
-    iso_storage_pool = var.iso_storage_pool
-    unmount          = true
-    cd_files = [
-      "../../http/windows/autounattend-client.xml",
-      "../../http/windows/setup-winrm.ps1",
-      "../../scripts/windows/install-qemu-agent.ps1"
-    ]
-    cd_label = "PROVISION"
-  }
+  # CRITICAL: Disable KVM for nested virtualization
+  disable_kvm = true
+
+  iso_file         = "local:iso/Win10_22H2_English_x64v1.iso"
   iso_storage_pool = var.iso_storage_pool
   unmount_iso      = true
 
-  # Hardware Configuration
-  os          = "win10"
-  cpu_type    = var.cpu_type
-  cores       = var.cores
-  memory      = var.memory
-  bios        = "ovmf"
-  machine     = "q35"
-  
-  # EFI Disk
-  efi_config {
-    efi_storage_pool = var.storage_pool
-    efi_type         = "4m"
-    pre_enrolled_keys = true
+  # VirtIO drivers ISO for Windows
+  additional_iso_files {
+    iso_file         = "local:iso/virtio-win.iso"
+    iso_storage_pool = var.iso_storage_pool
+    unmount          = true
+    device           = "sata3"
   }
 
-  # Disk Configuration
-  scsi_controller = "virtio-scsi-single"
+  qemu_agent = true
+
+  scsi_controller = "virtio-scsi-pci"
+
   disks {
-    disk_size    = var.disk_size
-    storage_pool = var.storage_pool
+    disk_size    = "60G"
+    storage_pool = var.vm_storage_pool
     type         = "scsi"
     format       = "raw"
-    io_thread    = true
-    discard      = true
   }
 
-  # Network Configuration
   network_adapters {
-    bridge   = var.network_bridge
-    model    = "virtio"
-    firewall = false
+    model  = "virtio"
+    bridge = "vmbr0"
   }
 
-  # Boot Configuration
-  boot_wait = "3s"
+  cpu_type = "qemu64"
+  cores   = 4
+  memory  = 4096
+  os      = "win10"
+  bios    = "seabios"
+  machine = "q35"
 
-  # WinRM Configuration
+  http_directory = "../../http"
+  http_port_min  = 8804
+  http_port_max  = 8804
+
+  boot_wait = "5s"
+  boot_command = [
+    "<enter><wait><enter><wait><enter><wait><enter>"
+  ]
+
   communicator   = "winrm"
   winrm_username = var.winrm_username
   winrm_password = var.winrm_password
-  winrm_timeout  = "4h"
+  winrm_timeout  = "60m"
   winrm_use_ssl  = true
   winrm_insecure = true
 
   # Tags
-  tags = "base;windows;windows-client;windows-10"
+  tags = "windows;windows-10;client;template"
 }
 
-# Windows 11 Base Template
+# Windows 11 Pro
 source "proxmox-iso" "windows-11" {
   proxmox_url              = var.proxmox_api_url
   username                 = var.proxmox_api_token_id
   token                    = var.proxmox_api_token_secret
-  node                     = var.proxmox_node
   insecure_skip_tls_verify = true
 
-  # VM Settings
-  vm_name              = "windows-11-base"
-  template_name        = "windows-11-base"
-  template_description = "Windows 11 Base Template"
-  
-  # CRITICAL: Disable KVM as required
-  disable_kvm = true
-  
-  # Enable QEMU Guest Agent
-  qemu_agent = true
+  node                 = var.proxmox_node
+  vm_name              = "windows-11-template"
+  template_description = local.build_description
 
-  # ISO Settings
-  iso_file = "${var.iso_storage_pool}:iso/windows-11.iso"
-  additional_iso_files {
-    device           = "sata3"
-    iso_storage_pool = var.iso_storage_pool
-    unmount          = true
-    cd_files = [
-      "../../http/windows/autounattend-client.xml",
-      "../../http/windows/setup-winrm.ps1",
-      "../../scripts/windows/install-qemu-agent.ps1"
-    ]
-    cd_label = "PROVISION"
-  }
+  # CRITICAL: Disable KVM for nested virtualization
+  disable_kvm = true
+
+  iso_file         = "local:iso/Win11_25H2_EnglishInternational_x64.iso"
   iso_storage_pool = var.iso_storage_pool
   unmount_iso      = true
 
-  # Hardware Configuration
-  os          = "win11"
-  cpu_type    = var.cpu_type
-  cores       = var.cores
-  memory      = var.memory
-  bios        = "ovmf"
-  machine     = "q35"
-  tpm_state {
-    storage_pool = var.storage_pool
-    version      = "v2.0"
+  # VirtIO drivers ISO for Windows
+  additional_iso_files {
+    iso_file         = "local:iso/virtio-win.iso"
+    iso_storage_pool = var.iso_storage_pool
+    unmount          = true
+    device           = "sata3"
   }
-  
-  # EFI Disk
+
+  qemu_agent = true
+
+  scsi_controller = "virtio-scsi-pci"
+
+  disks {
+    disk_size    = "60G"
+    storage_pool = var.vm_storage_pool
+    type         = "scsi"
+    format       = "raw"
+  }
+
+  network_adapters {
+    model  = "virtio"
+    bridge = "vmbr0"
+  }
+
+  cpu_type = "qemu64"
+  cores   = 4
+  memory  = 8192
+  os      = "win11"
+  bios    = "ovmf"
+  machine = "q35"
+
   efi_config {
-    efi_storage_pool = var.storage_pool
-    efi_type         = "4m"
+    efi_storage_pool  = var.vm_storage_pool
+    efi_type          = "4m"
     pre_enrolled_keys = true
   }
 
-  # Disk Configuration
-  scsi_controller = "virtio-scsi-single"
-  disks {
-    disk_size    = var.disk_size
-    storage_pool = var.storage_pool
-    type         = "scsi"
-    format       = "raw"
-    io_thread    = true
-    discard      = true
-  }
+  # Note: TPM support requires Proxmox configuration on the host
+  # TPM can be added via Proxmox UI after template creation if needed
 
-  # Network Configuration
-  network_adapters {
-    bridge   = var.network_bridge
-    model    = "virtio"
-    firewall = false
-  }
+  http_directory = "../../http"
+  http_port_min  = 8804
+  http_port_max  = 8804
 
-  # Boot Configuration
-  boot_wait = "3s"
+  boot_wait = "5s"
+  boot_command = [
+    "<enter><wait><enter><wait><enter><wait><enter>"
+  ]
 
-  # WinRM Configuration
   communicator   = "winrm"
   winrm_username = var.winrm_username
   winrm_password = var.winrm_password
-  winrm_timeout  = "4h"
+  winrm_timeout  = "60m"
   winrm_use_ssl  = true
   winrm_insecure = true
 
   # Tags
-  tags = "base;windows;windows-client;windows-11"
+  tags = "windows;windows-11;client;template"
 }
 
-# Build Configuration
 build {
+  name = "windows-client-templates"
+
   sources = [
     "source.proxmox-iso.windows-10",
     "source.proxmox-iso.windows-11"
   ]
 
-  # Install QEMU Guest Agent
+  # Install updates and configure Windows
   provisioner "powershell" {
     scripts = [
-      "../../scripts/windows/install-qemu-agent.ps1"
-    ]
-  }
-
-  # Install Windows Updates
-  provisioner "windows-update" {
-    search_criteria = "IsInstalled=0"
-    filters = [
-      "exclude:$_.Title -like '*Preview*'",
-      "include:$true"
-    ]
-    update_limit = 25
-  }
-
-  # Install additional updates script
-  provisioner "powershell" {
-    scripts = [
-      "../../scripts/windows/install-updates.ps1"
-    ]
-  }
-
-  # Cleanup
-  provisioner "powershell" {
-    scripts = [
+      "../../scripts/windows/install-updates.ps1",
+      "../../scripts/windows/install-qemu-agent.ps1",
       "../../scripts/windows/cleanup.ps1"
     ]
   }
 
-  # Sysprep and shutdown
+  # Run Sysprep
   provisioner "powershell" {
     inline = [
-      "& $env:SystemRoot\\System32\\Sysprep\\Sysprep.exe /oobe /generalize /quiet /quit /mode:vm",
-      "while($true) { $imageState = Get-ItemProperty HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Setup\\State | Select ImageState; if($imageState.ImageState -ne 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE') { Write-Output $imageState.ImageState; Start-Sleep -s 10  } else { break } }"
+      "C:\\Windows\\System32\\Sysprep\\Sysprep.exe /generalize /oobe /shutdown /quiet"
     ]
   }
 }
