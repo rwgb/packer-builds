@@ -1,12 +1,20 @@
-# Add secrets to your GitHub repository
-*.auto.pkrvars.hcl
-variables.pkrvars.hcl
-
-# Packer cache
+# Packer
+*.box
 packer_cache/
+output-*/
+crash.log
+*.log
+
+# Packer plugin cache
 .packer.d/
 
-# OS specific
+# Sensitive files
+*.pkrvars.hcl
+!variables.auto.pkrvars.hcl.example
+secrets/
+*.secret
+
+# OS files
 .DS_Store
 Thumbs.db
 
@@ -15,11 +23,15 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+*~
 
-# Logs
-*.log
-crash.log
+# Terraform (if used)
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
 
 # Temporary files
 *.tmp
-*~
+tmp/
+temp/

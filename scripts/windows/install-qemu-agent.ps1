@@ -1,24 +1,28 @@
 # Install QEMU Guest Agent
-Write-Host "==> Installing QEMU Guest Agent..."
+Write-Host "Installing QEMU Guest Agent..."
 
-# Check if running in QEMU/KVM environment
-$virtioIso = "E:\"
-if (Test-Path $virtioIso) {
-    # Install from VirtIO ISO
-    $agentPath = "$virtioIso\guest-agent\qemu-ga-x86_64.msi"
-    
-    if (Test-Path $agentPath) {
-        Write-Host "Installing QEMU Guest Agent from VirtIO ISO..."
-        Start-Process msiexec.exe -ArgumentList "/i `"$agentPath`" /qn /norestart" -Wait -NoNewWindow
-        
-        # Start the service
-        Start-Service QEMU-GA
-        Set-Service QEMU-GA -StartupType Automatic
-        
-        Write-Host "==> QEMU Guest Agent installed and started"
-    } else {
-        Write-Host "QEMU Guest Agent installer not found on VirtIO ISO"
-    }
+$virtioIsoPath = "E:\virtio-win-gt-x64.msi"
+
+if (Test-Path $virtioIsoPath) {
+    Write-Host "Installing from provisioning media..."
+    Start-Process msiexec.exe -ArgumentList "/i $virtioIsoPath /qn /norestart" -Wait
 } else {
-    Write-Host "VirtIO ISO not found, skipping QEMU Guest Agent installation"
+    Write-Host "Downloading QEMU Guest Agent..."
+    $url = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/latest-virtio/virtio-win-gt-x64.msi"
+    $output = "$env:TEMP\virtio-win-gt-x64.msi"
+    
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri $url -OutFile $output
+    
+    Write-Host "Installing QEMU Guest Agent..."
+    Start-Process msiexec.exe -ArgumentList "/i $output /qn /norestart" -Wait
+    
+    Remove-Item $output
 }
+
+# Start and enable the service
+Write-Host "Starting QEMU Guest Agent service..."
+Set-Service -Name "QEMU-GA" -StartupType Automatic
+Start-Service -Name "QEMU-GA"
+
+Write-Host "QEMU Guest Agent installation complete!"

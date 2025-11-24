@@ -7,6 +7,7 @@ packer {
   }
 }
 
+# Variable Definitions
 variable "proxmox_api_url" {
   type = string
 }
@@ -24,16 +25,6 @@ variable "proxmox_node" {
   type = string
 }
 
-variable "iso_storage_pool" {
-  type    = string
-  default = "local"
-}
-
-variable "vm_storage_pool" {
-  type    = string
-  default = "local-lvm"
-}
-
 variable "ssh_username" {
   type    = string
   default = "packer"
@@ -41,134 +32,202 @@ variable "ssh_username" {
 
 variable "ssh_password" {
   type      = string
-  sensitive = true
   default   = "packer"
+  sensitive = true
 }
 
-# Debian 12 (Bookworm)
+variable "storage_pool" {
+  type    = string
+  default = "local-lvm"
+}
+
+variable "iso_storage_pool" {
+  type    = string
+  default = "local"
+}
+
+variable "network_bridge" {
+  type    = string
+  default = "vmbr0"
+}
+
+variable "cpu_type" {
+  type    = string
+  default = "host"
+}
+
+variable "cores" {
+  type    = number
+  default = 2
+}
+
+variable "memory" {
+  type    = number
+  default = 2048
+}
+
+variable "disk_size" {
+  type    = string
+  default = "20G"
+}
+
+# Debian 12 Base Template
 source "proxmox-iso" "debian-12" {
   proxmox_url              = var.proxmox_api_url
   username                 = var.proxmox_api_token_id
   token                    = var.proxmox_api_token_secret
+  node                     = var.proxmox_node
   insecure_skip_tls_verify = true
 
-  node                 = var.proxmox_node
-  vm_name              = "debian-12-template"
-  template_description = "Debian 12 (Bookworm) template built with Packer"
+  # VM Settings
+  vm_name              = "debian-12-base"
+  template_name        = "debian-12-base"
+  template_description = "Debian 12 Base Template"
 
-  iso_file         = "local:iso/debian-12.8.0-amd64-netinst.iso"
+  # CRITICAL: Disable KVM as required
+  disable_kvm = true
+  qemu_agent  = true
+
+  # ISO Settings
+  iso_file         = "${var.iso_storage_pool}:iso/debian-12.12.0-amd64-netinst.iso"
   iso_storage_pool = var.iso_storage_pool
-  iso_checksum     = "sha512:3b6d1297f10c6c05a0e07b66ef99bb5a0aca4a15d99dbc5c3a2f70b1e9b2c7c4dd4f0c3b4a17c0f0c2f0c8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8"
   unmount_iso      = true
 
-  qemu_agent = true
+  # Hardware Configuration
+  # When disable_kvm=true, must use qemu64 or x86-64-v2-AES instead of "host"
+  cpu_type = "qemu64"
+  cores    = var.cores
+  memory   = var.memory
 
+  # Disk Configuration
   scsi_controller = "virtio-scsi-pci"
-
   disks {
-    disk_size    = "20G"
-    storage_pool = var.vm_storage_pool
+    disk_size    = var.disk_size
+    storage_pool = var.storage_pool
     type         = "scsi"
+    format       = "raw"
   }
 
+  # Network Configuration
   network_adapters {
+    bridge = var.network_bridge
     model  = "virtio"
-    bridge = "vmbr0"
   }
 
-  cores  = 2
-  memory = 2048
-
-  cloud_init              = true
-  cloud_init_storage_pool = var.vm_storage_pool
-
-  http_directory = "http"
-  http_port_min  = 8802
-  http_port_max  = 8802
-
+  # Boot Configuration
   boot_wait = "5s"
   boot_command = [
     "<esc><wait>",
     "auto url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/debian/preseed.cfg<enter>"
   ]
 
-  ssh_username = var.ssh_username
-  ssh_password = var.ssh_password
-  ssh_timeout  = "20m"
+  http_directory = "../../http"
+
+  # SSH Configuration
+  ssh_username           = var.ssh_username
+  ssh_password           = var.ssh_password
+  ssh_timeout            = "1h"
+  ssh_handshake_attempts = 20
+
+  # Tags
+  tags = "base;debian;debian-12"
 }
 
-# Debian 13 (Trixie)
+# Debian 13 Base Template
 source "proxmox-iso" "debian-13" {
   proxmox_url              = var.proxmox_api_url
   username                 = var.proxmox_api_token_id
   token                    = var.proxmox_api_token_secret
+  node                     = var.proxmox_node
   insecure_skip_tls_verify = true
 
-  node                 = var.proxmox_node
-  vm_name              = "debian-13-template"
-  template_description = "Debian 13 (Trixie) template built with Packer"
+  # VM Settings
+  vm_name              = "debian-13-base"
+  template_name        = "debian-13-base"
+  template_description = "Debian 13 Base Template"
 
-  iso_file         = "local:iso/debian-13-testing-amd64-netinst.iso"
+  # CRITICAL: Disable KVM as required
+  disable_kvm = true
+  qemu_agent  = true
+
+  # ISO Settings
+  iso_file         = "${var.iso_storage_pool}:iso/debian-13.1.0-amd64-netinst.iso"
   iso_storage_pool = var.iso_storage_pool
   unmount_iso      = true
 
-  qemu_agent = true
+  # Hardware Configuration
+  # When disable_kvm=true, must use qemu64 or x86-64-v2-AES instead of "host"
+  cpu_type = "qemu64"
+  cores    = var.cores
+  memory   = var.memory
 
+  # Disk Configuration
   scsi_controller = "virtio-scsi-pci"
-
   disks {
-    disk_size    = "20G"
-    storage_pool = var.vm_storage_pool
+    disk_size    = var.disk_size
+    storage_pool = var.storage_pool
     type         = "scsi"
+    format       = "raw"
   }
 
+  # Network Configuration
   network_adapters {
+    bridge = var.network_bridge
     model  = "virtio"
-    bridge = "vmbr0"
   }
 
-  cores  = 2
-  memory = 2048
-
-  cloud_init              = true
-  cloud_init_storage_pool = var.vm_storage_pool
-
-  http_directory = "http"
-  http_port_min  = 8802
-  http_port_max  = 8802
-
+  # Boot Configuration
   boot_wait = "5s"
   boot_command = [
     "<esc><wait>",
     "auto url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/debian/preseed.cfg<enter>"
   ]
 
-  ssh_username = var.ssh_username
-  ssh_password = var.ssh_password
-  ssh_timeout  = "20m"
+  http_directory = "../../http"
+
+  # SSH Configuration
+  ssh_username           = var.ssh_username
+  ssh_password           = var.ssh_password
+  ssh_timeout            = "1h"
+  ssh_handshake_attempts = 20
+
+  # Tags
+  tags = "base;debian;debian-13"
 }
 
+# Build Configuration
 build {
-  name = "debian-templates"
-
   sources = [
     "source.proxmox-iso.debian-12",
     "source.proxmox-iso.debian-13"
   ]
 
-  # Update system and install basic packages
+  # Update system packages
   provisioner "shell" {
-    scripts = [
-      "scripts/linux/update.sh",
-      "scripts/linux/install-cloud-init.sh",
-      "scripts/linux/cleanup.sh"
+    inline = [
+      "sudo apt-get update",
+      "sudo apt-get upgrade -y",
+      "sudo apt-get dist-upgrade -y"
     ]
   }
 
-  # Final message
+  # Run cleanup and update scripts
+  provisioner "shell" {
+    scripts = [
+      "../../scripts/linux/update.sh",
+      "../../scripts/linux/install-cloud-init.sh",
+      "../../scripts/linux/cleanup.sh"
+    ]
+  }
+
+  # Final cleanup
   provisioner "shell" {
     inline = [
-      "echo 'Debian template build complete!'"
+      "sudo apt-get autoremove -y",
+      "sudo apt-get clean",
+      "sudo rm -rf /tmp/*",
+      "sudo rm -rf /var/tmp/*",
+      "sudo cloud-init clean"
     ]
   }
 }

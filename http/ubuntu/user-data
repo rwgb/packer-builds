@@ -1,34 +1,45 @@
 #cloud-config
 autoinstall:
   version: 1
-  locale: en_US
+  locale: en_US.UTF-8
   keyboard:
     layout: us
   network:
     network:
       version: 2
       ethernets:
-        eth0:
+        ens18:
           dhcp4: true
-  storage:
-    layout:
-      name: direct
-  identity:
-    hostname: ubuntu
-    username: packer
-    password: "$6$rounds=4096$saltsalt$YKKb6I4xKY5LKI3b6I4xKY5LKI3b6I4xKY5LKI3b6I4xKY5LKI3b6I4xKY5LKI3b6I4xKY5LKI3b6I4xKY5"  # packer
   ssh:
     install-server: true
     allow-pw: true
+  identity:
+    hostname: ubuntu-packer
+    username: packer
+    password: "$6$rounds=4096$saltsaltsal$fBV2FueP8F0HN8b0S0dp0C5j5L5lC5b0J0K0L0M0N0P0Q0R0S0T0U0V0W0X0Y0Z0"
+  user-data:
+    disable_root: false
+    timezone: UTC
+    chpasswd:
+      expire: false
+      list: |
+        packer:packer
+  storage:
+    layout:
+      name: lvm
   packages:
+    - openssh-server
     - qemu-guest-agent
     - cloud-init
-    - curl
-    - wget
-    - vim
-  user-data:
-    disable_root: true
-    timezone: UTC
+    - python3
+    - sudo
   late-commands:
     - echo 'packer ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/packer
-    - chmod 440 /target/etc/sudoers.d/packer
+    - chmod 0440 /target/etc/sudoers.d/packer
+    - curtin in-target --target=/target -- systemctl enable ssh
+    - curtin in-target --target=/target -- systemctl enable qemu-guest-agent
+    - curtin in-target --target=/target -- systemctl start qemu-guest-agent
+    - curtin in-target --target=/target -- systemctl enable cloud-init cloud-config cloud-final cloud-init-local
+    - curtin in-target --target=/target -- touch /etc/cloud/cloud-init.disabled
+    - curtin in-target --target=/target -- rm /etc/cloud/cloud-init.disabled
+    - curtin in-target --target=/target -- cloud-init clean

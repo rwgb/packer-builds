@@ -1,0 +1,55 @@
+name: Build Ubuntu Template on Skull
+
+on:
+  push:
+    branches:
+      - '*'
+      - '!dev'
+      - '!main'
+    paths:
+      - 'templates/linux/ubuntu.pkr.hcl'
+      - 'templates/linux/skull.pkrvars.hcl'
+      - 'scripts/linux/**'
+      - 'http/ubuntu/**'
+      - '.github/workflows/build-ubuntu-skull.yml'
+  
+  workflow_dispatch:
+
+jobs:
+  build-ubuntu:
+    name: Build Ubuntu Template on Skull Node
+    runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: 'latest'
+      
+      - name: Initialize Packer
+        working-directory: templates/linux
+        run: packer init ubuntu.pkr.hcl
+      
+      - name: Validate Packer template
+        working-directory: templates/linux
+        run: packer validate -var-file=skull.pkrvars.hcl ubuntu.pkr.hcl
+      
+      - name: Build Ubuntu template
+        working-directory: templates/linux
+        run: packer build -var-file=skull.pkrvars.hcl ubuntu.pkr.hcl
+        env:
+          PACKER_LOG: 1
+      
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packer-build-logs
+          path: |
+            templates/linux/*.log
+            logs/*.log
+          retention-days: 7
